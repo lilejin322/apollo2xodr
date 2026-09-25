@@ -5,13 +5,20 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "apollo2xodr"
 version = "0.1.0"
-description = "Convert Apollo HD maps (base_map.bin) to OpenDRIVE"
-readme = "docs/README.md"
+license = "Apache-2.0"
+description = "Convert Apollo HD maps to OpenDRIVE format"
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "numpy",
     "shapely>=2",
     "protobuf",
+    "utm",
+]
+keywords = ["apollo2xodr", "autonomous-driving", "map-convert"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
 ]
 
 [project.optional-dependencies]
@@ -29,3 +36,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[project.urls]
+Homepage = "https://github.com/lilejin322/apollo2xodr"
