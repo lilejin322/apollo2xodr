@@ -14,6 +14,7 @@ dependencies = [
     "shapely>=2",
     "protobuf",
     "utm",
+    "networkx>=3.2",
 ]
 keywords = ["apollo2xodr", "autonomous-driving", "map-convert"]
 classifiers = [
@@ -22,7 +23,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "matplotlib"]
 
 [project.scripts]
 apollo2xodr = "apollo2xodr.cli:main"
@@ -35,7 +36,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 
 [project.urls]
 Homepage = "https://github.com/lilejin322/apollo2xodr"
