@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apollo2xodr"
+version = "0.1.0"
+description = "Convert Apollo HD maps (base_map.bin) to OpenDRIVE"
+readme = "docs/README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "shapely>=2",
+    "protobuf",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+apollo2xodr = "apollo2xodr.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"apollo2xodr.proto" = ["*.desc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

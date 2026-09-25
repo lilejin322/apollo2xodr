@@ -232,3 +232,13 @@ cython_debug/
 *.code-workspace
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python,visualstudiocode,macos
+
+# Scenic road network caches
+*.snet
+
+# Test scripts
+tests/
+
+# Internal docs
+docs/reviews/
+docs/superpowers/
