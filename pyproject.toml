@@ -15,6 +15,7 @@ dependencies = [
     "protobuf",
     "utm",
     "networkx>=3.2",
+    "scipy",
 ]
 keywords = ["apollo2xodr", "autonomous-driving", "map-convert"]
 classifiers = [

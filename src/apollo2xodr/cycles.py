@@ -5,6 +5,7 @@ Each cyclic source lane becomes head -> ordinary core -> tail. Junction paths ca
 connect those cores without unrolling a loop or dropping its closing edge. Internal IDs
 are unique; OpenDRIVE userData continues to name the original Apollo lane.
 """
+
 import networkx as nx
 import numpy as np
 from dataclasses import replace
@@ -82,6 +83,7 @@ def _slice(points: np.ndarray, start: float, end: float) -> np.ndarray:
     :returns: sliced polyline
     :rtype: np.ndarray
     """
+    assert 0.0 <= start <= end, f"slice needs 0 <= start <= end, got {start}..{end}"
     if len(points) < 2:
         return np.array(points, dtype=float, copy=True)
     part = substring(LineString(points), start, end)
