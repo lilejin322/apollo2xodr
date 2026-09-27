@@ -44,6 +44,7 @@ def cubic_segments(s: np.ndarray, values: np.ndarray,
     :param np.ndarray s: sample positions for s[i], shape (N,) in meters
     :param np.ndarray values: sample values for values[i], shape (N,) in meters
     :returns: OpenDRIVE's standard (sOffset, a, b, c, d)
+    :rtype: List[Tuple[float, float, float, float, float]]
     """
     s, values = np.asarray(s, dtype=float), np.asarray(values, dtype=float)
     if tolerance > 0 and len(s) > 2:
