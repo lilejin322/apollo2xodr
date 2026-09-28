@@ -63,7 +63,7 @@ class Chords:
         """
         How much farther each curve point is from its nearest segment than that segment allows.
         
-        :param np.ndarray curve: the curve to check/judge, shape(P,) P is the num of points on the curve
+        :param np.ndarray curve: the curve to check/judge, shape(P, 2), P is the num of points on the curve
         :returns: the allowance for each point on the curve, shape(P,)
                   Positive indicate out of scope, negative indicate in the allowance.
         :rtype: np.ndarray
