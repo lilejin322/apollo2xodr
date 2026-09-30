@@ -32,7 +32,10 @@ class BoundaryRef:
     @property
     def points(self) -> np.ndarray:
         """
-        Points in the driving direction, shape (N, 3).
+        Points in the driving direction.
+
+        :returns: the points, shape (N, 3)
+        :rtype: np.ndarray
         """
         return self.boundary.points[::-1] if self.reversed else self.boundary.points
 
