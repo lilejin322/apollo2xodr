@@ -1,5 +1,5 @@
 """
-Utility functions for the geometry submodule.
+Utility functions submodule for the geometry.
 """
 
 from typing import List, Optional

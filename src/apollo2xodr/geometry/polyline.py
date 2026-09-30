@@ -1,5 +1,5 @@
-"""Polyline utilities and OpenDRIVE geometry fitting (NumPy + Shapely).
-
+"""
+Polyline utilities and OpenDRIVE geometry fitting (NumPy + Shapely) submodule.
 Polylines are ``(N, 3)`` float arrays; only x/y take part in plan-view geometry, z is carried along for elevation.
 """
 
