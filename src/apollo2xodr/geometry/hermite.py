@@ -7,7 +7,7 @@ from typing import Tuple, List
 from scipy.interpolate import CubicHermiteSpline, PchipInterpolator
 from shapely.geometry import LineString
 from .polyline import heading_of
-from .__init__ import _GAUSS_P, _GAUSS_W
+from .plan_geometry import _GAUSS_P, _GAUSS_W
 
 def hermite_poly3(p0: np.ndarray, p1: np.ndarray, m0: np.ndarray, 
                   m1: np.ndarray) -> Tuple[float, Tuple[float, float, 

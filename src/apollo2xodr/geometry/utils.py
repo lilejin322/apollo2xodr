@@ -6,7 +6,7 @@ from typing import List, Optional
 import numpy as np
 from scipy.interpolate import PPoly
 from .plan_geometry import PlanGeometry
-from .__init__ import _GAUSS_P, _GAUSS_W
+from .plan_geometry import _GAUSS_P, _GAUSS_W
 
 LENGTH_MARGIN = 1e-7     # relative, see span_geometry()
 
