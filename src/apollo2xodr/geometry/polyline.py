@@ -6,7 +6,8 @@ Polylines are ``(N, 3)`` float arrays; only x/y take part in plan-view geometry,
 import shapely
 import numpy as np
 from typing import Optional
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
+from shapely.ops import substring
 
 def dedupe(points: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     """
@@ -277,3 +278,36 @@ def reverses_direction(predecessor: np.ndarray, successor: np.ndarray, max_turn_
     """
     a, b = end_direction(predecessor, False), end_direction(successor, True)
     return a is not None and b is not None and float(a @ b) < np.cos(np.radians(max_turn_deg))
+
+def move_endpoint(points: np.ndarray, at_start: bool, xy: np.ndarray,
+                  reach: float = 15.0) -> np.ndarray:
+    """
+    Let a polyline start (end) at ``xy``: find where ``xy`` projects onto the first ``reach``
+    metres from that end, drop the vertices before that point and start from ``xy`` instead.
+    If ``xy`` lies outward of the moved end, that end vertex is replaced by ``xy``; if it projects
+    onto the far end of the searched part, everything up to there goes and the line folds back
+    from ``xy``. A U-turn's other leg is safe only when it is more than ``reach`` metres along the
+    line from the moved end. Extra coordinates, including z, are interpolated at the projected
+    station, so outward of the moved end they keep that end's value.
+
+    :param np.ndarray points: the input points, shape (N, 2) or (N, 3), N >= 2
+    :param bool at_start: move the first point when true, otherwise the last
+    :param np.ndarray xy: x, y of the new end point, shape (2,); its z comes from the interpolation
+    :param float reach: length, in m, of the end part searched for the projection
+    :returns: the moved polyline, in the same order as ``points``, shape (M, 2) or (M, 3)
+              where M <= N
+    :rtype: np.ndarray
+    """
+    pts = points if at_start else points[::-1]   # work on the start; an end is the start of the reversed line
+    s = arc_lengths(pts)
+    # project only onto the first ``reach`` metres; a U-turn's other leg further along cannot catch xy
+    head = substring(LineString(pts[:, :2]), 0.0, min(reach, s[-1]))
+    cut = head.project(Point(xy[0], xy[1])) if head.length > 0 else 0.0   # 0 when xy lies before the start
+    rest = pts[s > cut + 1e-6]                   # vertices past the cut; the old start always goes
+    if not len(rest):                            # xy projects onto the last vertex: keep it
+        rest = pts[-1:]
+    # z and any other coordinates at the cut; with cut 0 that is the old start's value, not extrapolated
+    first = np.array([np.interp(cut, s, pts[:, k]) for k in range(pts.shape[1])])
+    first[:2] = xy                               # x, y exactly at xy, even off the line
+    out = np.vstack([first, rest])
+    return out if at_start else out[::-1]        # back to the input order

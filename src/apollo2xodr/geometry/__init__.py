@@ -5,7 +5,9 @@ Geometry module for the reverse engineering of apollo hdmap.
 import numpy as np
 from shapely.geometry import LineString
 from typing import Optional, Tuple, List
-from .polyline import dedupe, arc_lengths
+from .polyline import (dedupe, arc_lengths, simplify, slice_polyline, end_direction, extend, resample,
+                       midline, remove_end_kinks, heading_of, reverses_direction)
+from .hermite import cubic_segments
 from .constraint import Chords
 from .plan_geometry import PlanGeometry
 from .b_spline import Spline
