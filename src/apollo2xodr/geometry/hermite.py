@@ -284,9 +284,10 @@ def blend_length(points: np.ndarray, heading: float, at_start: bool,
     :returns: the blend length in m; 0 when the polyline has no direction (all points coincide in x, y)
     :rtype: float
     """
-    own = end_direction(points, at_start)
-    if own is None:
+    own = end_direction(points, at_start)        # (2,) unit direction of travel at that end, or None
+    if own is None:                              # no direction to turn from
         return 0.0
+    # angle between the end's direction and heading, in [0, pi]; clip keeps rounding from pushing arccos past ±1
     turn = float(np.arccos(np.clip(own @ np.array([np.cos(heading), np.sin(heading)]), -1.0, 1.0)))
     return max(minimum, per_radian * turn)
 
@@ -309,16 +310,20 @@ def blend_heading(points: np.ndarray, heading: float, at_start: bool, max_share:
               points itself when the polyline has no direction or no length
     :rtype: np.ndarray
     """
-    pts = points if at_start else points[::-1]
+    pts = points if at_start else points[::-1]   # work on the start; an end is the start of the reversed line
+    # (2,) direction to leave pts[0] in; reversing the line reverses the direction of travel as well
     into = np.array([np.cos(heading), np.sin(heading)]) * (1.0 if at_start else -1.0)
-    s = arc_lengths(pts)
-    if end_direction(pts, True) is None or s[-1] <= 1e-6:
+    s = arc_lengths(pts)                         # (N,) XY arc length at each vertex
+    if end_direction(pts, True) is None or s[-1] <= 1e-6:   # no direction or no length: nothing to blend
         return points
-    length = min(blend_length(points, heading, at_start), max_share * s[-1])
+    length = min(blend_length(points, heading, at_start), max_share * s[-1])   # m of the line to replace
+    # (D,) point on the line at that length, z included; the curve ends here
     end = np.array([np.interp(length, s, pts[:, k]) for k in range(pts.shape[1])])
+    # the segment pts[k - 1] -> pts[k] holds that point; the curve joins the line in its direction
     k = int(np.clip(np.searchsorted(s, length, side='right'), 1, len(pts) - 1))
-    along = end_direction(pts[k - 1:k + 1], True)
+    along = end_direction(pts[k - 1:k + 1], True)   # (2,), or None for a zero-length segment
     along = into if along is None else along
     curve = HermiteCurve.fit_directions(pts[0], end, into, along)
+    # curve samples (ending exactly at end), then the vertices past it; one at end itself would repeat it
     out = np.vstack([curve.sample(), pts[s > length + 1e-6]])
-    return out if at_start else out[::-1]
+    return out if at_start else out[::-1]        # back to the input order

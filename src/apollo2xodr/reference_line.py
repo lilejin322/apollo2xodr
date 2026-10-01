@@ -10,7 +10,7 @@ from shapely.geometry import LineString
 from typing import List, Optional, Tuple
 from .geometry.polyline import extend
 from .geometry.utils import LENGTH_MARGIN
-from .geometry.hermite import hermite_poly3
+from .geometry.hermite import HermiteCurve
 from .geometry import PlanGeometry, fit_plan_view, FIT_TOLERANCE
 
 @dataclass
@@ -123,7 +123,8 @@ class ReferenceLine:
             # Subtract the origin before solving, to keep small derivatives well conditioned.
             coeffs = np.linalg.solve(matrix, points - points[0])
             m0, m1 = coeffs[1], coeffs[1] + 2 * coeffs[2] + 3 * coeffs[3]
-            hdg, coeffs, length = hermite_poly3(points[0], points[-1], m0, m1)
+            segment = HermiteCurve(points[0], points[-1], m0, m1)
+            hdg, coeffs, length = segment.to_param_poly3()
             # a hair short, so a reader bracketing p in [0, 1] does not step past the span
             length *= 1 - LENGTH_MARGIN
             if length <= 1e-9:

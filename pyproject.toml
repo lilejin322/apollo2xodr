@@ -8,7 +8,7 @@ version = "0.1.0"
 license = "Apache-2.0"
 description = "Convert Apollo HD maps to OpenDRIVE format"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "shapely>=2",
