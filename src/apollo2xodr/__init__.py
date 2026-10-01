@@ -13,11 +13,10 @@ from .frames import FRAMES, Frame
 from .geometry import FIT_TOLERANCE
 from .opendrive import build_document, write_document
 from .reader import read_map
-from .roads import build_roads
+from .road import build_roads, Road
 from .signals import place_signals, SignalLayout
 from .topology import build_topology
 from .model import MapData
-from .roads import Road
 from .topology import Topology
 
 __version__ = '0.1.0'
