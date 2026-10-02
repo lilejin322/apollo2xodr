@@ -115,6 +115,18 @@ class Road:
             return [(self.right[-1], False)] if at_end else [(self.right[0], True)]
         return [(lane, not at_end) for lane in self.right] + [(lane, at_end) for lane in self.left]
 
+    def lane_end_s(self, lane: Lane, at_start: bool) -> float:
+        """
+        Where the lane starts (or ends) along the reference line.
+
+        :param Lane lane: a lane of this road
+        :param bool at_start: the end where the lane starts in its driving direction when true, otherwise where it ends
+        :returns: s in m, its lane section's start where a right lane starts or a left lane ends, otherwise its end
+        :rtype: float
+        """
+        lo, hi = self.lane_range(lane)
+        return lo if at_start == (lane in self.right) else hi
+
     def lane_end(self, lane: Lane, at_start: bool) -> np.ndarray:
         """
         x/y of the lane's (left, right) borders where it starts (or ends), as the written OpenDRIVE puts them.
@@ -128,8 +140,8 @@ class Road:
         :rtype: np.ndarray
         """
         along = lane in self.right
-        lo, hi = self.lane_range(lane)
-        s = lo if at_start == along else hi
+        lo, _ = self.lane_range(lane)
+        s = self.lane_end_s(lane, at_start)
         x, y, hdg = self.reference.at(s)
         inner = 0.0
         if not self.path:
@@ -152,10 +164,8 @@ class Road:
         :returns: heading in radians: the reference heading for a right lane, turned by pi for a left lane
         :rtype: float
         """
-        along = lane in self.right
-        lo, hi = self.lane_range(lane)
-        _, _, hdg = self.reference.at(lo if at_start == along else hi)
-        return float(hdg if along else hdg + np.pi)
+        _, _, hdg = self.reference.at(self.lane_end_s(lane, at_start))
+        return float(hdg if lane in self.right else hdg + np.pi)
 
     def elevation_at(self, s: float) -> float:
         """

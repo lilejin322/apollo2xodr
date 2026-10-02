@@ -251,14 +251,15 @@ def connecting_plans(plans: List[RoadPlan], plan_of: Dict[Lane, RoadPlan]) -> Se
     :param List[RoadPlan] plans: road plans from ``plan_roads``
     :param Dict[Lane, RoadPlan] plan_of: the plan holding each lane of ``plans``
     :returns: plans to write as connecting material: those whose first right lane is in an Apollo junction, those
-        beyond a plain road end that meets several plans or connecting material (grown until nothing changes), and
-        short islands (two-way, at least three lanes, none longer than ``SHORT_ISLAND``, every lane entered from and
-        leaving into connecting material only)
+              beyond a plain road end that meets several plans, has a lane with several neighbours at that end,
+              or meets connecting material (grown until nothing changes), and short islands (two-way, at least
+              three lanes, none longer than ``SHORT_ISLAND``, every lane entered from and leaving into connecting
+              material only)
     :rtype: Set[RoadPlan]
     """
     connecting = {plan for plan in plans if plan.right[0].junction is not None}
-    # Grow to a fixed point: where a plain road end meets several plans (a split or merge) or any connecting
-    # plan, everything beyond that end becomes connecting material, which may in turn affect other ends.
+    # Grow to a fixed point. A lane may split/merge with several lanes of just one neighbouring plan; counting plans
+    # alone would miss that and ordinary lane links could not represent all its neighbours.
     changed = True
     while changed:
         changed = False
@@ -267,7 +268,9 @@ def connecting_plans(plans: List[RoadPlan], plan_of: Dict[Lane, RoadPlan]) -> Se
                 continue
             for at_end in (False, True):
                 beyond = {plan_of[n] for n in plan.beyond(at_end)}
-                if len(beyond) > 1 or beyond & connecting:
+                branching = any(len(lane.successors if at_end == (lane in plan.right) else lane.predecessors) > 1
+                                for lane in plan.lanes)
+                if len(beyond) > 1 or branching or beyond & connecting:
                     added = beyond - connecting
                     if added:
                         connecting |= added
