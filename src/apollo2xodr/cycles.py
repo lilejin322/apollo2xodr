@@ -4,15 +4,19 @@ Break cycles in connecting material by retaining ordinary road cores inside the 
 Each cyclic source lane becomes head -> ordinary core -> tail. Junction paths can then
 connect those cores without unrolling a loop or dropping its closing edge. Internal IDs
 are unique; OpenDRIVE userData continues to name the original Apollo lane.
+The same slicing and remapping machinery also gives unentered branching junctions ordinary
+entry segments followed by connecting tails.
 """
 
 import networkx as nx
 import numpy as np
 from dataclasses import replace
-from typing import Set, List, Tuple
+from typing import Dict, Set, List, Tuple
 from shapely.geometry import LineString, Point
 from shapely.ops import substring
 from .model import Boundary, BoundaryRef, MapData, Lane
+
+__all__ = ['split_cycles', 'split_connecting_entries']
 
 def _slice_marks(ref: BoundaryRef, start: float, end: float) -> List[Tuple[np.ndarray, str]]:
     """
@@ -132,17 +136,14 @@ def split_cycles(data: MapData, material: Set[Lane]) -> bool:
     adjoining = {other for lane in cyclic for other in lane.predecessors + lane.successors
                  if other not in material}
 
-    occupied = set(data.lanes)
-    pieces, ranges = {}, {}
+    cuts = {}
     for lane in data.lanes.values():
         if lane not in cyclic | adjoining:
-            pieces[lane] = [lane]
             continue
         length = _length(lane.center)
         if length <= 1e-9:
             if lane in cyclic:
                 raise ValueError(f"Cannot split cyclic lane {lane.id!r}: centerline has zero length")
-            pieces[lane] = [lane]
             continue
         # Keep the core short so the connecting pieces have room to make a finite-width turn.
         half_core = min(5.0, length / 10) / (2 * length)
@@ -150,32 +151,83 @@ def split_cycles(data: MapData, material: Set[Lane]) -> bool:
         has_tail = lane in cyclic or any(p in cyclic for p in lane.successors)
         a = 0.5 - half_core if has_head else 0.0
         b = 0.5 + half_core if has_tail else 1.0
-        intervals = ([(0.0, a, 'head')] if has_head else []) + [(a, b, 'core')] + \
-                    ([(b, 1.0, 'tail')] if has_tail else [])
+        cuts[lane] = ([(0.0, a, 'head')] if has_head else []) + [(a, b, 'core')] + \
+                     ([(b, 1.0, 'tail')] if has_tail else [])
+    _split_lanes(data, cuts, 'cycle')
+    return True
+
+def split_connecting_entries(data: MapData, lanes: Set[Lane]) -> None:
+    """
+    Give a junction at the map edge ordinary incoming roads.
+
+    Each selected source lane is cut halfway into an ordinary core and a connecting tail. The core retains its id;
+    the tail takes ``{id}~entry-tail`` (with extra ``~`` if needed). Geometry, widths, markings, connectivity and
+    signal overlaps are sliced and remapped as for a cycle split. Callers must rebuild road plans afterwards.
+
+    :param MapData data: map changed in place
+    :param Set[Lane] lanes: connecting lanes without predecessors that need ordinary entry segments
+    """
+    if not lanes:
+        return
+    for lane in lanes:
+        if _length(lane.center) <= 1e-9:
+            raise ValueError(f"Cannot split entry lane {lane.id!r}: centerline has zero length")
+    _split_lanes(data, {lane: [(0.0, 0.5, 'core'), (0.5, 1.0, 'tail')] for lane in lanes}, 'entry')
+
+def _split_lanes(data: MapData, cuts: Dict[Lane, List[Tuple[float, float, str]]], tag: str) -> None:
+    """
+    Replace selected lanes with fractional intervals, retaining the core id and remapping links and overlaps.
+
+    Each piece is a new lane. Its centre line, both boundaries and width samples are cut at the piece's fractions of
+    each line's own length; the boundaries become unshared copies with their marks. It keeps the other fields of the
+    lane it is cut from, names the original Apollo lane in ``source_id``, lies on a road of its own and has no
+    neighbour links. Apollo's link id lists are emptied; only predecessors and successors are rebuilt. Pieces of one
+    lane follow one another, and a link between two lanes now runs from the last piece of the first to the first
+    piece of the second. A signal overlap on a cut lane moves to the piece holding its station, measured from the
+    piece's start.
+
+    :param MapData data: map changed in place; ``data.lanes`` holds each cut lane's pieces in its place, in order
+    :param Dict[Lane, List[Tuple[float, float, str]]] cuts: lane to its pieces as ``(a, b, role)``: fractions of
+        the lane's length, in driving order and covering 0 to 1 without gaps, and a role of ``'head'``, ``'core'``
+        or ``'tail'``. Exactly one piece is the core: it keeps the lane's id and is outside any junction. The others
+        take ``{id}~{tag}-{role}`` (``~`` appended while that is taken) and keep the lane's junction, or get
+        ``~{tag}:{id}`` when it has none
+    :param str tag: what the cut is for, ``'cycle'`` or ``'entry'``; it names the pieces, their roads
+                    (``~{tag}-road:{piece id}``) and their junction when the lane has none
+    """
+    occupied = set(data.lanes)
+    pieces, ranges = {}, {}
+    for lane in data.lanes.values():
+        if lane not in cuts:
+            pieces[lane] = [lane]
+            continue
+        length = _length(lane.center)
+        intervals = cuts[lane]
         split = []
         # Create a new lane for each interval
         for a, b, role in intervals:
             name = lane.id
             if role != 'core':
-                name = f'{lane.id}~cycle-{role}'
+                name = f'{lane.id}~{tag}-{role}'
                 while name in occupied:
                     name += '~'
                 occupied.add(name)
             boundaries = []
+            # Cut each boundary at the same fractions of its own length; the piece gets its own copy, no longer shared
             for ref in (lane.left, lane.right):
                 size = _length(ref.points)
                 boundaries.append(BoundaryRef(Boundary(_slice(ref.points, a * size, b * size), ref.boundary.kind),
                                               marks=_slice_marks(ref, a * size, b * size)))
             widths = lane.width_samples
-            if widths is not None:
+            if widths is not None and len(widths):
                 samples = np.r_[a, widths[(widths[:, 0] > a) & (widths[:, 0] < b), 0], b]
                 widths = np.column_stack([(samples - a) / (b - a),
                                           np.interp(samples, widths[:, 0], widths[:, 1])])
             part = replace(lane, id=name, source_id=lane.source_id or lane.id,
                            center=_slice(lane.center, a * length, b * length),
                            left=boundaries[0], right=boundaries[1], width_samples=widths,
-                           road=f'~cycle-road:{name}',
-                           junction=None if role == 'core' else lane.junction or f'~cycle:{lane.id}',
+                           road=f'~{tag}-road:{name}',
+                           junction=None if role == 'core' else lane.junction or f'~{tag}:{lane.id}',
                            left_forward=None, right_forward=None, left_reverse=None,
                            predecessors=[], successors=[], apollo_predecessors=[], apollo_successors=[])
             split.append(part)
@@ -207,4 +259,3 @@ def split_cycles(data: MapData, material: Set[Lane]) -> bool:
             overlaps.append((lane.id, min(max(s - a, 0.0), b - a)))
         control.overlap_lanes = overlaps
     data.lanes = {part.id: part for parts in pieces.values() for part in parts}
-    return True
