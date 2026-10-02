@@ -5,6 +5,7 @@ Reference Line module for OpenDRIVE format.
 import shapely
 import numpy as np
 from dataclasses import dataclass
+from numpy.polynomial import Polynomial
 from scipy.interpolate import BSpline
 from shapely.geometry import LineString
 from typing import List, Optional, Tuple
@@ -173,15 +174,19 @@ class ReferenceLine:
         # a float s comes back as three Python floats; an array keeps shape (M,)
         return tuple(v.reshape(s.shape) if s.ndim else float(v[0]) for v in result)
 
-    def project(self, point: np.ndarray) -> Tuple[float, float]:
+    def project(self, point: np.ndarray, s_range: Optional[Tuple[float, float]] = None) -> Tuple[float, float]:
         """
         Closest point of a query point on the reference line.
 
         :param np.ndarray point: one point, shape (2,) or (3,). Only x, y are used
-        :returns: (s, t). s is the arc length of the closest point, in m, clamped to the line.
+        :param Optional[Tuple[float, float]] s_range: finite, ordered bounds for the search, in m.
+                  The bounds are clipped to the reference line; a single station is allowed
+        :returns: (s, t). s is the arc length of the closest point in the search interval, in m.
                   t is the signed lateral offset, in m, left positive
         :rtype: Tuple[float, float]
         """
+        if s_range is not None:
+            return self._project_range(point, s_range)
         # The closest point lies within one sample spacing of a sample no farther than the nearest sample plus that
         # spacing; only the geometries holding such samples need the exact projection.
         distance = np.hypot(self.xy[:, 0] - point[0], self.xy[:, 1] - point[1])  # to each dense sample
@@ -201,6 +206,68 @@ class ReferenceLine:
         x, y, hdg = self.at(s)
         # left of the heading is positive
         return s, float(-np.sin(hdg) * (point[0] - x) + np.cos(hdg) * (point[1] - y))
+
+    def _project_range(self, point: np.ndarray, s_range: Tuple[float, float]) -> Tuple[float, float]:
+        """Project onto the requested interval itself, including portions of its boundary spans."""
+        lo, hi = s_range
+        if not np.isfinite([lo, hi]).all() or lo > hi:
+            raise ValueError(f's_range must be finite and ordered, got {s_range}')
+        lo, hi = np.clip([lo, hi], 0.0, self.length)
+        if lo == 0.0 and hi == self.length:
+            return self.project(point)
+        if lo == hi:
+            station = float(lo)
+        else:
+            # Include the interval endpoints: a short interval may contain no stored samples.
+            mask = (self.s >= lo) & (self.s <= hi)
+            sample_s = np.r_[lo, self.s[mask], hi]
+            x, y, _ = self.at(np.array([lo, hi]))
+            sample_xy = np.vstack(([x[0], y[0]], self.xy[mask], [x[1], y[1]]))
+            distance = np.hypot(sample_xy[:, 0] - point[0], sample_xy[:, 1] - point[1])
+            spacing = float(np.max(np.diff(sample_s)))
+            near = sample_s[distance <= distance.min() + 2 * spacing]
+            index = np.searchsorted(self.vertex_s, near, side='right') - 1
+            index = np.unique(np.clip(np.r_[index, index - 1], 0, len(self.geometries) - 1))
+            candidates = []
+            for i in index:
+                g = self.geometries[i]
+                start, end = max(0.0, lo - g.s), min(g.length, hi - g.s)
+                if start > end:
+                    continue
+                if start == end:
+                    gx, gy, _ = g.at(start)
+                    ds, squared = start, float((point[0] - gx) ** 2 + (point[1] - gy) ** 2)
+                elif start == 0.0 and end == g.length:
+                    ds, _, squared = g.project(point)
+                elif g.coeffs is None or g.curvature is not None:
+                    # A line or arc clipped at either end is still a line or arc.
+                    gx, gy, heading = g.at(start)
+                    piece = PlanGeometry(0.0, gx, gy, heading, end - start, curvature=g.curvature)
+                    local, _, squared = piece.project(point)
+                    ds = start + local
+                else:
+                    # Compose the polynomial with its restricted parameter interval. The existing
+                    # cubic projector then considers every stationary point inside that interval.
+                    p0, p1 = g.parameter(np.array([start, end]))
+                    parameter = Polynomial([p0, p1 - p0])
+                    coefficients = tuple(value for poly in (g.u(parameter), g.v(parameter))
+                                         for value in np.pad(poly.coef, (0, 4 - len(poly.coef))))
+                    piece = PlanGeometry(0.0, g.x, g.y, g.hdg, end - start, coefficients)
+                    local, _, squared = piece.project(point)
+                    # Keep the original span's arc-length convention rather than the clipped
+                    # polynomial's independently integrated table, and preserve exact endpoints.
+                    if local == 0.0:
+                        ds = start
+                    elif local == piece.length:
+                        ds = end
+                    else:
+                        p = p0 + (p1 - p0) * piece.parameter(local)
+                        ds = float(np.clip(g._distance_at_parameter(p), start, end))
+                candidates.append((g.s + ds, squared))
+            station = float(np.clip(min(candidates, key=lambda candidate: candidate[1])[0], lo, hi))
+        x, y, heading = self.at(station)
+        lateral = -np.sin(heading) * (point[0] - x) + np.cos(heading) * (point[1] - y)
+        return station, float(lateral)
 
     def lateral_offsets(self, s: np.ndarray, boundary: np.ndarray, reach: float = 60.0) -> np.ndarray:
         """
