@@ -26,7 +26,7 @@ class BoundaryRef:
     """shared polyline; neighbours may point at the same one"""
     reversed: bool = False
     """this lane drives against the stored point order"""
-    # point is float64, shape (3,) as read. A cycle slice inserts shape (2,) at the window start;
+    # point is float64, shape (3,) as read. A cycle or entry slice inserts shape (2,) at the window start;
     # slicing a boundary of one point or zero length keeps one mark, shape (2,), with the first type
     # (none when there are no marks).
     # Kept off the shared geometry so sharing and attachment cannot erase transitions.
@@ -71,7 +71,7 @@ class Lane:
     One Apollo lane, with its centre line and the two boundaries beside it.
     """
     # Apollo lane id. A cycle split names its pieces '{id}~cycle-head', '{id}' (the core) and '{id}~cycle-tail',
-    # appending '~' while a name is taken.
+    # appending '~' while a name is taken. A junction entry split retains '{id}' and adds '{id}~entry-tail'.
     id: str
     center: np.ndarray
     """(N, 3), in driving direction"""
@@ -81,10 +81,10 @@ class Lane:
     """right boundary in the driving direction"""
     speed_limit: float                               # m/s
     # Apollo road id; 'lane:{id}' if no Apollo road lists the lane. A cycle split gives each piece
-    # '~cycle-road:{piece id}'.
+    # '~cycle-road:{piece id}'; a junction entry split uses '~entry-road:{piece id}'.
     road: str
-    # A cycle split sets the core's to None, and a head's or tail's
-    # to '~cycle:{id}' when the lane had none.
+    # A cycle or entry split sets the core's to None, and a head's or tail's to
+    # '~cycle:{id}' or '~entry:{id}' when the lane had none.
     junction: Optional[str]
     """Apollo junction id, or None outside a junction"""
     apollo_predecessors: List[str] = field(default_factory=list)
@@ -105,7 +105,7 @@ class Lane:
     """OpenDRIVE lane type"""
     width_samples: Optional[np.ndarray] = None
     """(M, 2): fraction of the lane's length, width (Apollo samples)"""
-    # original Apollo id of a piece cut from a cyclic lane, or from a lane adjoining the cycle; None if not cut
+    # original Apollo id of a piece cut for a cycle, adjoining transition or junction entry; None if not cut
     source_id: Optional[str] = None
     sketched_roundabout: bool = False
     """centre was smoothed as part of a nearly circular hand-drawn loop"""
@@ -136,7 +136,7 @@ class TrafficControl:
     # (N, 3), a single stop line, read only to fill an empty stop_lines. The reader passes stop_lines[0];
     # nothing keeps the two in sync
     stop_line: np.ndarray
-    # (lane id, start s in m) from Apollo overlaps. A cycle split replaces a cut lane's entry with the piece holding
+    # (lane id, start s in m) from Apollo overlaps. A cycle or entry split replaces a cut lane's entry with the piece holding
     # s and s from that piece's start, clamped to the piece
     overlap_lanes: List[Tuple[str, float]]
     junction: Optional[str] = None
@@ -173,7 +173,7 @@ class MapData:
     One Apollo map after reading: lanes, signals, and the local-frame origin.
     """
     lanes: Dict[str, Lane]
-    """Lane.id to lane, in file order; cycle pieces replace their lane"""
+    """Lane.id to lane, in file order; cycle or junction entry pieces replace their lane"""
     road_order: List[str]
     """Apollo road ids in file order"""
     junction_order: List[str]
