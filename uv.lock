@@ -41,7 +41,7 @@ requires-dist = [
     { name = "protobuf" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "scipy" },
-    { name = "shapely", specifier = ">=2" },
+    { name = "shapely", specifier = ">=2.1.2" },
     { name = "utm" },
 ]
 provides-extras = ["dev"]

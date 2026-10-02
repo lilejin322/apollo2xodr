@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
-    "shapely>=2",
+    "shapely>=2.1.2",
     "protobuf",
     "utm",
     "networkx>=3.2",

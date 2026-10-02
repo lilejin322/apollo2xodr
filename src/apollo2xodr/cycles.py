@@ -25,7 +25,10 @@ def _slice_marks(ref: BoundaryRef, start: float, end: float) -> List[Tuple[np.nd
     :param BoundaryRef ref: boundary reference
     :param float start: start of the arc-length window
     :param float end: end of the arc-length window
-    :returns: marking states covering the arc-length window
+    :returns: marking states covering the window: first the state in force at ``start``, at the window start as an
+              (x, y) point of shape (2,), then every mark strictly inside the window with its point as stored, shape
+              (3,) as read. A boundary of one point or of zero length gives only its first mark, at that point's x, y;
+              one without marks gives none
     :rtype: List[Tuple[np.ndarray, str]]
     """
     if not ref.marks:        # no marks to slice, return []
@@ -33,7 +36,7 @@ def _slice_marks(ref: BoundaryRef, start: float, end: float) -> List[Tuple[np.nd
 
     points = ref.points
 
-    if len(points) < 2:      # a single point cannot have a marking
+    if len(points) < 2:      # a single point keeps the first marking state, at its x, y
         return [(np.asarray(points[0, :2], dtype=float), ref.marks[0][1])]
 
     line = LineString(points[:, :2])
@@ -122,7 +125,9 @@ def split_cycles(data: MapData, material: Set[Lane]) -> bool:
     Split cyclic SCCs in-place; return whether road plans need to be rebuilt.
 
     :param MapData data: whole map, mutated in place
-    :param Set[Lane] material: connecting lanes searched for cycles; only a cyclic component and adjoining ends outside it are cut
+    :param Set[Lane] material: connecting lanes searched for cycles. The lanes on a cycle are cut, and so are lanes
+                               outside ``material`` directly before or after one, at their end towards it; a lane of
+                               ``material`` next to a cycle but not on one stays whole
     :returns: True if road plans need to be rebuilt, False otherwise
     :rtype: bool
     """
@@ -183,8 +188,10 @@ def _split_lanes(data: MapData, cuts: Dict[Lane, List[Tuple[float, float, str]]]
     lane it is cut from, names the original Apollo lane in ``source_id``, lies on a road of its own and has no
     neighbour links. Apollo's link id lists are emptied; only predecessors and successors are rebuilt. Pieces of one
     lane follow one another, and a link between two lanes now runs from the last piece of the first to the first
-    piece of the second. A signal overlap on a cut lane moves to the piece holding its station, measured from the
-    piece's start.
+    piece of the second. A signal overlap on a cut lane moves to the first piece that ends beyond its station: one
+    at a cut goes to the later piece, one at or past the lane's end to the last piece. The station is then measured
+    from that piece's start and clamped to the piece; on a 100 m lane cut in half, 50 m becomes 0 m on the tail and
+    150 m becomes 50 m.
 
     :param MapData data: map changed in place; ``data.lanes`` holds each cut lane's pieces in its place, in order
     :param Dict[Lane, List[Tuple[float, float, str]]] cuts: lane to its pieces as ``(a, b, role)``: fractions of
