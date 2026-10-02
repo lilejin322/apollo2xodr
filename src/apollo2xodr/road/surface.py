@@ -579,7 +579,9 @@ def fit_elevation(road: Road, reference: np.ndarray) -> None:
     The source points keep their heights but are placed at their stations on the final reference line, which
     corner rounding or surface repair may have moved. Each point is projected onto it; a projection that would
     step back is held at the previous station, the first and last points are pinned to 0 and the road's length,
-    and of points sharing a station only the last is kept. The knots are then thinned with Shapely's simplify in
+    and of points sharing a station only the last is kept. At s = 0 the first point is kept instead: points that
+    project back onto the start, such as an end kink the reference line dropped, must not replace the height an
+    attached end was given. The knots are then thinned with Shapely's simplify in
     the (s, z) plane, which keeps every remaining point within ELEVATION_TOLERANCE measured across the profile;
     vertically that is about sqrt(1 + g^2) times as much on a local grade g. A source without any height change
     gives one constant record.
@@ -599,7 +601,9 @@ def fit_elevation(road: Road, reference: np.ndarray) -> None:
     # (N,) station of each source point on the final reference; a projection never steps back
     s = np.maximum.accumulate([road.reference.project(point)[0] for point in reference])
     s[0], s[-1] = 0.0, road.reference.length  # the profile covers the whole road
-    keep = np.r_[np.diff(s) > 1e-9, True]     # of points sharing a station, keep the last
+    keep = np.r_[np.diff(s) > 1e-9, True]     # of points sharing a station, keep the last ...
+    keep[s <= 1e-9] = False
+    keep[0] = True                            # ... but at s = 0 the first point, whose height an attachment may set
     s, reference = s[keep], reference[keep]
     # knots of a piecewise-linear profile within ELEVATION_TOLERANCE of the source heights
     kept = np.asarray(LineString(np.column_stack([s, reference[:, 2]])).simplify(ELEVATION_TOLERANCE).coords) \
